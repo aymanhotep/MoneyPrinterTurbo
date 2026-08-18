@@ -15,8 +15,8 @@ class GenerativeVideoError(RuntimeError):
 
 _SUCCESS_STATES = {"completed", "complete", "succeeded", "success", "ready", "done"}
 _FAILURE_STATES = {"failed", "failure", "error", "cancelled", "canceled", "rejected"}
-_MAGNIFIC_DEFAULT_BASE_URL = "https://api.magnific.com"
-_MAGNIFIC_DEFAULT_MODEL = "runway-4-5"
+_FREEPIK_DEFAULT_BASE_URL = "https://api.freepik.com"
+_FREEPIK_DEFAULT_MODEL = "runway-4-5"
 
 
 def _cfg(name: str, default: Any = None) -> Any:
@@ -25,12 +25,14 @@ def _cfg(name: str, default: Any = None) -> Any:
 
 def _provider() -> str:
     configured = str(_cfg("generative_video_provider", "")).strip().lower()
+    if configured in {"magnific", "freepik"}:
+        return "freepik"
     if configured:
         return configured
 
     base_url = str(_cfg("generative_video_base_url", "")).strip().lower()
-    if "api.magnific.com" in base_url:
-        return "magnific"
+    if "api.freepik.com" in base_url:
+        return "freepik"
     return "generic"
 
 
@@ -38,8 +40,8 @@ def _base_url() -> str:
     configured = str(_cfg("generative_video_base_url", "")).strip()
     if configured:
         return configured
-    if _provider() == "magnific":
-        return _MAGNIFIC_DEFAULT_BASE_URL
+    if _provider() == "freepik":
+        return _FREEPIK_DEFAULT_BASE_URL
     return ""
 
 
@@ -51,8 +53,8 @@ def _headers() -> dict[str, str]:
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     api_key = str(_cfg("generative_video_api_key", "")).strip()
     if api_key:
-        if _provider() == "magnific":
-            default_header = "x-magnific-api-key"
+        if _provider() == "freepik":
+            default_header = "x-freepik-api-key"
             default_prefix = ""
         else:
             default_header = "Authorization"
@@ -179,7 +181,7 @@ def _aspect_ratio(video_aspect: VideoAspect) -> str:
     return VideoAspect(video_aspect).value
 
 
-def _magnific_ratio(video_aspect: VideoAspect) -> str:
+def _freepik_ratio(video_aspect: VideoAspect) -> str:
     aspect = VideoAspect(video_aspect)
     mapping = {
         VideoAspect.landscape: "1280:720",
@@ -193,19 +195,19 @@ def _model() -> str:
     configured = str(_cfg("generative_video_model", "")).strip()
     if configured:
         return configured
-    if _provider() == "magnific":
-        return _MAGNIFIC_DEFAULT_MODEL
+    if _provider() == "freepik":
+        return _FREEPIK_DEFAULT_MODEL
     return ""
 
 
 def _default_create_path() -> str:
-    if _provider() == "magnific":
+    if _provider() == "freepik":
         return f"/v1/ai/text-to-video/{_model()}"
     return "/v1/videos/generations"
 
 
 def _default_status_path() -> str:
-    if _provider() == "magnific":
+    if _provider() == "freepik":
         return f"/v1/ai/text-to-video/{_model()}/{{id}}"
     return "/v1/videos/generations/{id}"
 
@@ -213,12 +215,12 @@ def _default_status_path() -> str:
 def _create_payload(
     prompt: str, duration: int, video_aspect: VideoAspect
 ) -> dict[str, Any]:
-    if _provider() == "magnific":
+    if _provider() == "freepik":
         aspect_field = str(
             _cfg("generative_video_aspect_field", "ratio")
         ).strip() or "ratio"
         aspect_value = (
-            _magnific_ratio(video_aspect)
+            _freepik_ratio(video_aspect)
             if aspect_field == "ratio"
             else _aspect_ratio(video_aspect)
         )
