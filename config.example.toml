@@ -50,46 +50,10 @@ tls_verify = true
 # Video Materials / 视频素材
 # -----------------------------------------------------------------------------
 
-# Available values: "pexels", "pixabay", "coverr", "generative", "loomloom", "local".
-# "generative" turns each generated video term into an AI-video prompt and uses
-# the configurable provider adapter below. "loomloom" is a paid Shengsuan Cloud
-# source and requires explicit confirmation in the WebUI before each request.
+# Available values: "pexels", "pixabay", "coverr", "loomloom", "local".
+# "loomloom" is a paid Shengsuan Cloud source and requires explicit
+# confirmation in the WebUI before each generation request.
 video_source = "pexels"
-
-# AI-video provider adapter.
-# Supported presets:
-# - "generic": any async REST gateway using the configurable fields below.
-# - "magnific": Magnific/Freepik-style async text-to-video API. Set only the API
-#   key for the default Runway 4.5 endpoint, or override model/paths as needed.
-# Higgsfield does not expose a documented API-key REST contract here; keep it on
-# "generic" only when you have an authenticated gateway that you control.
-generative_video_provider = "generic"
-generative_video_base_url = ""
-generative_video_api_key = ""
-generative_video_api_key_header = "Authorization"
-generative_video_api_key_prefix = "Bearer "
-generative_video_model = ""
-generative_video_create_path = "/v1/videos/generations"
-generative_video_status_path = "/v1/videos/generations/{id}"
-generative_video_connect_timeout_seconds = 30
-generative_video_request_timeout_seconds = 120
-generative_video_poll_interval_seconds = 3
-generative_video_run_timeout_seconds = 900
-# Optional TOML inline tables for provider-specific defaults/headers, e.g.
-# generative_video_request_defaults = { quality = "high" }
-# generative_video_extra_headers = { "X-Provider" = "my-gateway" }
-generative_video_request_defaults = {}
-generative_video_extra_headers = {}
-# Magnific preset example:
-# generative_video_provider = "magnific"
-# generative_video_base_url = "https://api.magnific.com"
-# generative_video_api_key = "YOUR_MAGNIFIC_API_KEY"
-# generative_video_api_key_header = "x-magnific-api-key"
-# generative_video_api_key_prefix = ""
-# generative_video_model = "runway-4-5"
-# generative_video_create_path = "/v1/ai/text-to-video/runway-4-5"
-# generative_video_status_path = "/v1/ai/text-to-video/runway-4-5/{id}"
-# generative_video_aspect_field = "ratio"
 
 # API key lists support key rotation. Use straight ASCII double quotes and
 # separate multiple keys with commas, for example: ["key-1", "key-2"].
@@ -161,9 +125,9 @@ gemini_model_name = ""
 
 # DeepSeek
 # API key: https://platform.deepseek.com/api_keys
-deepseseek_api_key = ""
-deepseseek_base_url = ""
-deepseseek_model_name = ""
+deepseek_api_key = ""
+deepseek_base_url = ""
+deepseek_model_name = ""
 
 # Alibaba Cloud Qwen
 # API key: https://dashscope.console.aliyun.com/apiKey
@@ -393,6 +357,7 @@ pitch = 0
 
 [elevenlabs]
 # API key: https://elevenlabs.io/app/settings/api-keys
+# Favorite voices in the ElevenLabs voice library are shown in the WebUI.
 api_key = ""
 # Available models include eleven_multilingual_v2, eleven_flash_v2_5, and eleven_v3.
 model_id = "eleven_multilingual_v2"
