@@ -15,24 +15,53 @@ class GenerativeVideoError(RuntimeError):
 
 _SUCCESS_STATES = {"completed", "complete", "succeeded", "success", "ready", "done"}
 _FAILURE_STATES = {"failed", "failure", "error", "cancelled", "canceled", "rejected"}
+_MAGNIFIC_DEFAULT_BASE_URL = "https://api.magnific.com"
+_MAGNIFIC_DEFAULT_MODEL = "runway-4-5"
 
 
 def _cfg(name: str, default: Any = None) -> Any:
     return config.app.get(name, default)
 
 
+def _provider() -> str:
+    configured = str(_cfg("generative_video_provider", "")).strip().lower()
+    if configured:
+        return configured
+
+    base_url = str(_cfg("generative_video_base_url", "")).strip().lower()
+    if "api.magnific.com" in base_url:
+        return "magnific"
+    return "generic"
+
+
+def _base_url() -> str:
+    configured = str(_cfg("generative_video_base_url", "")).strip()
+    if configured:
+        return configured
+    if _provider() == "magnific":
+        return _MAGNIFIC_DEFAULT_BASE_URL
+    return ""
+
+
 def is_enabled() -> bool:
-    return bool(str(_cfg("generative_video_base_url", "")).strip())
+    return bool(_base_url())
 
 
 def _headers() -> dict[str, str]:
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     api_key = str(_cfg("generative_video_api_key", "")).strip()
     if api_key:
+        if _provider() == "magnific":
+            default_header = "x-magnific-api-key"
+            default_prefix = ""
+        else:
+            default_header = "Authorization"
+            default_prefix = "Bearer "
+
         header_name = str(
-            _cfg("generative_video_api_key_header", "Authorization")
-        ).strip() or "Authorization"
-        prefix = str(_cfg("generative_video_api_key_prefix", "Bearer "))
+            _cfg("generative_video_api_key_header", default_header)
+        ).strip() or default_header
+        prefix = str(_cfg("generative_video_api_key_prefix", default_prefix))
         headers[header_name] = f"{prefix}{api_key}"
 
     extra_headers = _cfg("generative_video_extra_headers", {})
@@ -50,7 +79,7 @@ def _request_timeout() -> tuple[int, int]:
 
 
 def _endpoint(path: str) -> str:
-    base_url = str(_cfg("generative_video_base_url", "")).strip()
+    base_url = _base_url()
     if not base_url:
         raise GenerativeVideoError("generative_video_base_url is not configured")
     return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
@@ -118,6 +147,8 @@ def _video_url(payload: Any) -> str:
             "data.output_url",
             "data.url",
             "data.0.url",
+            "data.generated.0",
+            "generated.0",
             "output.video_url",
             "output.url",
             "output.0.url",
@@ -148,15 +179,63 @@ def _aspect_ratio(video_aspect: VideoAspect) -> str:
     return VideoAspect(video_aspect).value
 
 
-def _create_payload(prompt: str, duration: int, video_aspect: VideoAspect) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "prompt": prompt,
-        "duration": int(duration),
-        "aspect_ratio": _aspect_ratio(video_aspect),
+def _magnific_ratio(video_aspect: VideoAspect) -> str:
+    aspect = VideoAspect(video_aspect)
+    mapping = {
+        VideoAspect.landscape: "1280:720",
+        VideoAspect.portrait: "720:1280",
+        VideoAspect.square: "960:960",
     }
-    model = str(_cfg("generative_video_model", "")).strip()
-    if model:
-        payload["model"] = model
+    return mapping[aspect]
+
+
+def _model() -> str:
+    configured = str(_cfg("generative_video_model", "")).strip()
+    if configured:
+        return configured
+    if _provider() == "magnific":
+        return _MAGNIFIC_DEFAULT_MODEL
+    return ""
+
+
+def _default_create_path() -> str:
+    if _provider() == "magnific":
+        return f"/v1/ai/text-to-video/{_model()}"
+    return "/v1/videos/generations"
+
+
+def _default_status_path() -> str:
+    if _provider() == "magnific":
+        return f"/v1/ai/text-to-video/{_model()}/{{id}}"
+    return "/v1/videos/generations/{id}"
+
+
+def _create_payload(
+    prompt: str, duration: int, video_aspect: VideoAspect
+) -> dict[str, Any]:
+    if _provider() == "magnific":
+        aspect_field = str(
+            _cfg("generative_video_aspect_field", "ratio")
+        ).strip() or "ratio"
+        aspect_value = (
+            _magnific_ratio(video_aspect)
+            if aspect_field == "ratio"
+            else _aspect_ratio(video_aspect)
+        )
+        payload: dict[str, Any] = {
+            "prompt": prompt,
+            "duration": int(duration),
+            aspect_field: aspect_value,
+        }
+    else:
+        payload = {
+            "prompt": prompt,
+            "duration": int(duration),
+            "aspect_ratio": _aspect_ratio(video_aspect),
+        }
+        model = _model()
+        if model:
+            payload["model"] = model
 
     extras = _cfg("generative_video_request_defaults", {})
     if isinstance(extras, dict):
@@ -195,10 +274,10 @@ def generate_clip(
         raise GenerativeVideoError("generative video backend is not configured")
 
     create_path = str(
-        _cfg("generative_video_create_path", "/v1/videos/generations")
+        _cfg("generative_video_create_path", _default_create_path())
     ).strip()
     status_path_template = str(
-        _cfg("generative_video_status_path", "/v1/videos/generations/{id}")
+        _cfg("generative_video_status_path", _default_status_path())
     ).strip()
     poll_interval = max(
         1.0, float(_cfg("generative_video_poll_interval_seconds", 3) or 3)
@@ -207,7 +286,11 @@ def generate_clip(
         1.0, float(_cfg("generative_video_run_timeout_seconds", 900) or 900)
     )
 
-    logger.info(f"generating AI video material for prompt={prompt!r}")
+    logger.info(
+        "generating AI video material: "
+        f"provider={_provider()}, model={_model() or 'configured-by-endpoint'}, "
+        f"prompt={prompt!r}"
+    )
     created = _request_json(
         "POST",
         _endpoint(create_path),
@@ -220,11 +303,11 @@ def generate_clip(
 
     if direct_url and state not in _FAILURE_STATES:
         return MaterialInfo(
-            provider="generative",
+            provider=_provider(),
             url=direct_url,
             duration=int(duration),
             source_info={
-                "provider": "generative",
+                "provider": _provider(),
                 "search_term": prompt,
                 "asset_id": generation_id or None,
             },
@@ -246,11 +329,11 @@ def generate_clip(
 
         if video_url and (not state or state in _SUCCESS_STATES):
             return MaterialInfo(
-                provider="generative",
+                provider=_provider(),
                 url=video_url,
                 duration=int(duration),
                 source_info={
-                    "provider": "generative",
+                    "provider": _provider(),
                     "search_term": prompt,
                     "asset_id": generation_id,
                 },
