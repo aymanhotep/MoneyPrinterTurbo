@@ -11,7 +11,7 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 
 from app.config import config
 from app.models.schema import MaterialInfo, VideoAspect, VideoConcatMode
-from app.services import material_cache, task_artifacts
+from app.services import generative_video, material_cache, task_artifacts
 from app.utils import utils
 
 # Thread-safe counter for API key rotation
@@ -768,18 +768,31 @@ def download_videos(
 ) -> List[str]:
     provider = "pexels"
     remote_search_videos = search_videos_pexels
+    cache_search_results = True
     if source == "pixabay":
         provider = "pixabay"
         remote_search_videos = search_videos_pixabay
     elif source == "coverr":
         provider = "coverr"
         remote_search_videos = search_videos_coverr
+    elif source == "generative":
+        provider = "generative"
+        remote_search_videos = generative_video.search_videos
+        # Generated clips are paid/unique outputs and their temporary URLs may expire.
+        # Never store them in the stock-material search cache.
+        cache_search_results = False
 
     def search_videos(
         search_term: str,
         minimum_duration: int,
         video_aspect: VideoAspect,
     ) -> List[MaterialInfo]:
+        if not cache_search_results:
+            return remote_search_videos(
+                search_term=search_term,
+                minimum_duration=minimum_duration,
+                video_aspect=video_aspect,
+            )
         return _search_videos_with_cache(
             provider=provider,
             search_videos=remote_search_videos,
